@@ -134,10 +134,57 @@ class MTPLossLoggingHelper:
         tracker["reduce_group"] = reduce_group
         tracker["avg_group"] = avg_group
 
+    @staticmethod
+    def save_accuracy_to_tracker(
+        labels: torch.Tensor,
+        logits: torch.Tensor,
+        loss_mask: torch.Tensor,
+        layer_number: int,
+        num_layers: int,
+        reduce_group: torch.distributed.ProcessGroup = None,
+        avg_group: torch.distributed.ProcessGroup = None,
+    ):
+        """Save the mtp accuracy for logging.
+        Args:
+            labels (torch.Tensor): The ground truth labels.
+            logits (torch.Tensor): The predicted logits.
+            loss_mask (torch.Tensor): Mask to ignore certain positions.
+            layer_number (int): Layer index of the accuracy.
+            num_layers (int): The number of total layers.
+            reduce_group (torch.distributed.ProcessGroup): The group for reducing the accuracy.
+            avg_group (torch.distributed.ProcessGroup): The group for averaging the accuracy.
+        """
+        # Skip mtp accuracy logging if layer_number is None.
+        if layer_number is None:
+            return
+
+        tracker = MTPLossLoggingHelper.tracker
+        if "accuracy_values" not in tracker:
+            tracker["accuracy_values"] = torch.zeros(num_layers, device=labels.device)
+        if "accuracy_counts" not in tracker:
+            tracker["accuracy_counts"] = torch.zeros(num_layers, device=labels.device)
+        
+        # Calculate accuracy
+        predictions = torch.argmax(logits, dim=-1)
+        predictions = predictions.transpose(0, 1)  # Ensure labels are in the correct shape
+        correct = (predictions == labels).float()
+        masked_correct = correct * loss_mask
+        
+        # Accumulate correct predictions and total count for this layer
+        tracker["accuracy_values"][layer_number] += masked_correct.sum().detach()
+        tracker["accuracy_counts"][layer_number] += loss_mask.sum().detach()
+        tracker["reduce_group"] = reduce_group
+        tracker["avg_group"] = avg_group
+
+
     def clean_loss_in_tracker():
         """Clear the mtp losses."""
         tracker = MTPLossLoggingHelper.tracker
         tracker["values"].zero_()
+        if "accuracy_values" in tracker:
+            tracker["accuracy_values"].zero_()
+        if "accuracy_counts" in tracker:
+            tracker["accuracy_counts"].zero_()
         tracker["reduce_group"] = None
         tracker["avg_group"] = None
 
@@ -154,6 +201,20 @@ class MTPLossLoggingHelper:
             torch.distributed.all_reduce(
                 values, group=tracker['avg_group'], op=torch.distributed.ReduceOp.AVG
             )
+        # Reduce accuracy values across ranks
+        if "accuracy_values" in tracker and "accuracy_counts" in tracker:
+            accuracy_values = tracker["accuracy_values"]
+            accuracy_counts = tracker["accuracy_counts"]
+            if tracker.get('reduce_group') is not None:
+                torch.distributed.all_reduce(accuracy_values, group=tracker.get('reduce_group'))
+                torch.distributed.all_reduce(accuracy_counts, group=tracker.get('reduce_group'))
+            if tracker.get('avg_group') is not None:
+                torch.distributed.all_reduce(
+                    accuracy_values, group=tracker['avg_group'], op=torch.distributed.ReduceOp.SUM
+                )
+                torch.distributed.all_reduce(
+                    accuracy_counts, group=tracker['avg_group'], op=torch.distributed.ReduceOp.SUM
+                )
 
     def track_mtp_metrics(loss_scale, iteration, writer, wandb_writer=None, total_loss_dict=None):
         """Track the Multi-Token Prediction (MTP) metrics for logging."""
@@ -172,6 +233,21 @@ class MTPLossLoggingHelper:
                 writer.add_scalar(name, loss, iteration)
             if wandb_writer is not None:
                 wandb_writer.log({f"{name}": loss}, iteration)
+
+        # Log accuracies
+        if "accuracy_values" in tracker and "accuracy_counts" in tracker:
+            accuracy_values = tracker["accuracy_values"]
+            accuracy_counts = tracker["accuracy_counts"]
+            for i in range(mtp_num_layers):
+                if accuracy_counts[i] > 0:
+                    accuracy = accuracy_values[i] / accuracy_counts[i]
+                    name = f"mtp_{i+1} accuracy"
+                    if total_loss_dict is not None:
+                        total_loss_dict[name] = accuracy
+                    if writer is not None:
+                        writer.add_scalar(name, accuracy, iteration)
+                    if wandb_writer is not None:
+                        wandb_writer.log({f"{name}": accuracy}, iteration)
 
         MTPLossLoggingHelper.clean_loss_in_tracker()
 
@@ -670,6 +746,14 @@ class MultiTokenPredictionBlock(MegatronModule):
                     torch.sum(mtp_loss) / num_tokens,
                     layer_number,
                     self.config.mtp_num_layers,
+                    avg_group=parallel_state.get_tensor_and_context_parallel_group(),
+                )
+                MTPLossLoggingHelper.save_accuracy_to_tracker(
+                    labels=labels,
+                    logits=mtp_logits,
+                    loss_mask=loss_mask,
+                    layer_number=layer_number,
+                    num_layers=self.config.mtp_num_layers,
                     avg_group=parallel_state.get_tensor_and_context_parallel_group(),
                 )
             mtp_loss_scale = self.mtp_loss_scaling_factor / self.config.mtp_num_layers

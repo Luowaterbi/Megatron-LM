@@ -9,7 +9,8 @@ export TORCH_NCCL_AVOID_RECORD_STREAMS=1
 
 # 从 run_oc1.5.sh 迁移的路径和基本配置
 ROOT="/step3-abla/siming"
-MEGATRON_PATH="/step3-abla/lxz/oc/Megatron-LM"
+# MEGATRON_PATH="/step3-abla/lxz/oc/Megatron-LM"
+MEGATRON_PATH="./"
 CHECKPOINT_PATH="/step3-abla/lxz/oc/save/checkpoint/${SAVE_NAME}/"
 TENSORBOARD_LOGS_PATH="/step3-abla/lxz/oc/save/tensorboard/${SAVE_NAME}/"
 PRETRAIN_CHECKPOINT_PATH="/step3-abla/lxz/oc/save/checkpoint/iter_0484865/"
@@ -129,6 +130,7 @@ TRAINING_ARGS=(
     --adam-beta2 0.95
     --adam-eps 1e-8
     --bf16
+    --ckpt-format torch
 )
 
 # 模型并行参数
@@ -163,7 +165,7 @@ EVAL_AND_LOGGING_ARGS=(
     --log-interval 1
     --eval-interval 1000
     --eval-iters 50
-    --save-interval 1000
+    --save-interval 250
     --log-timers-to-tensorboard
     --log-validation-ppl-to-tensorboard
     --distributed-timeout-minutes 15
@@ -173,12 +175,15 @@ EVAL_AND_LOGGING_ARGS=(
 )
 
 LOAD_CHECKPOINT_PATH=""
+LOAD_TYPE=""
 if [ -d "$CHECKPOINT_PATH" ] && [ "$(ls -A "$CHECKPOINT_PATH" 2>/dev/null)" ]; then
     echo "发现当前实验的续训检查点: $CHECKPOINT_PATH"
     LOAD_CHECKPOINT_PATH="$CHECKPOINT_PATH"
+    LOAD_TYPE="continue"
 elif [ -d "$PRETRAIN_CHECKPOINT_PATH" ]; then
     echo "发现预训练检查点: $PRETRAIN_CHECKPOINT_PATH"
     LOAD_CHECKPOINT_PATH="$PRETRAIN_CHECKPOINT_PATH"
+    LOAD_TYPE="pretrain"
 else
     echo "未找到可用检查点，从头开始训练"
 fi
@@ -186,17 +191,22 @@ fi
 if [ -n "$LOAD_CHECKPOINT_PATH" ]; then
     EVAL_AND_LOGGING_ARGS+=(
         --load "$LOAD_CHECKPOINT_PATH"
-        --no-load-optim
-        --no-load-rng
-        --finetune
     )
+    
+    if [ "$LOAD_TYPE" = "pretrain" ]; then
+        EVAL_AND_LOGGING_ARGS+=(
+            --finetune
+            --no-load-optim
+            --no-load-rng
+        )
+    fi
 fi
 
 cd "$MEGATRON_PATH"
 
 MTP_ARGS=(
-    --mtp-num-layers 1                   # MTP 层数
-    --mtp-loss-scaling-factor 0.3         # MTP 损失缩放因子
+    --mtp-num-layers 2                   # MTP 层数
+    --mtp-loss-scaling-factor 0.1         # MTP 损失缩放因子
 )
 
 
