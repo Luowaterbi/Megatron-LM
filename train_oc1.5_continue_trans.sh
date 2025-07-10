@@ -163,7 +163,7 @@ EVAL_AND_LOGGING_ARGS=(
     --log-interval 1
     --eval-interval 1000
     --eval-iters 50
-    --save-interval 1000
+    --save-interval 5
     --log-timers-to-tensorboard
     --log-validation-ppl-to-tensorboard
     --distributed-timeout-minutes 15
@@ -172,24 +172,32 @@ EVAL_AND_LOGGING_ARGS=(
     --seed 42
 )
 
-LOAD_CHECKPOINT_PATH=$PRETRAIN_CHECKPOINT_PATH
-# if [ -d "$CHECKPOINT_PATH" ] && [ "$(ls -A "$CHECKPOINT_PATH" 2>/dev/null)" ]; then
-#     echo "发现当前实验的续训检查点: $CHECKPOINT_PATH"
-#     LOAD_CHECKPOINT_PATH="$CHECKPOINT_PATH"
-# elif [ -d "$PRETRAIN_CHECKPOINT_PATH" ]; then
-#     echo "发现预训练检查点: $PRETRAIN_CHECKPOINT_PATH"
-#     LOAD_CHECKPOINT_PATH="$PRETRAIN_CHECKPOINT_PATH"
-# else
-#     echo "未找到可用检查点，从头开始训练"
-# fi
+LOAD_CHECKPOINT_PATH=""
+LOAD_TYPE=""
+if [ -d "$CHECKPOINT_PATH" ] && [ "$(ls -A "$CHECKPOINT_PATH" 2>/dev/null)" ]; then
+    echo "发现当前实验的续训检查点: $CHECKPOINT_PATH"
+    LOAD_CHECKPOINT_PATH="$CHECKPOINT_PATH"
+    LOAD_TYPE="continue"
+elif [ -d "$PRETRAIN_CHECKPOINT_PATH" ]; then
+    echo "发现预训练检查点: $PRETRAIN_CHECKPOINT_PATH"
+    LOAD_CHECKPOINT_PATH="$PRETRAIN_CHECKPOINT_PATH"
+    LOAD_TYPE="pretrain"
+else
+    echo "未找到可用检查点，从头开始训练"
+fi
 
 if [ -n "$LOAD_CHECKPOINT_PATH" ]; then
     EVAL_AND_LOGGING_ARGS+=(
         --load "$LOAD_CHECKPOINT_PATH"
-        --no-load-optim
-        --no-load-rng
-        --finetune
     )
+    
+    if [ "$LOAD_TYPE" = "pretrain" ]; then
+        EVAL_AND_LOGGING_ARGS+=(
+            --finetune
+            --no-load-optim
+            --no-load-rng
+        )
+    fi
 fi
 
 cd "$MEGATRON_PATH"
@@ -224,9 +232,9 @@ torchrun ${DISTRIBUTED_ARGS[@]} \
     ${DDP_ARGS[@]} \
     ${DATA_ARGS_LIST[@]} \
     ${FLASH_ARGS[@]} \
-    ${EVAL_AND_LOGGING_ARGS[@]} \
-    --ckpt-convert-format torch \
-    --ckpt-convert-save /step3-abla/lxz/oc/save/${SAVE_NAME}/checkpoint_torch/
+    ${EVAL_AND_LOGGING_ARGS[@]}
+    # --ckpt-convert-format torch \
+    # --ckpt-convert-save /step3-abla/lxz/oc/save/${SAVE_NAME}/checkpoint_torch/
     # ${MTP_ARGS[@]}
 
 set +x

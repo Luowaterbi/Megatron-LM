@@ -2,7 +2,7 @@
 
 # 设置路径
 HF_CHECKPOINT_PATH="/step3-abla/siming/ckpts/hf/code_expV59/iter_0484865"
-MEGATRON_CHECKPOINT_PATH="/step3-abla/lxz/oc/save/checkpoint/iter_0484865"
+MEGATRON_CHECKPOINT_PATH="/step3-abla/lxz/oc/save/checkpoint/iter_0484865_vocab_96539"
 
 # 创建输出目录
 mkdir -p "$MEGATRON_CHECKPOINT_PATH"
@@ -39,7 +39,6 @@ python tools/checkpoint/convert.py \
     --tokenizer-model "$HF_CHECKPOINT_PATH" \
     --model-size llama3 \
     --checkpoint-type hf \
-    --true-vocab-size 96639 \
     --bf16
 
 echo "转换完成！"

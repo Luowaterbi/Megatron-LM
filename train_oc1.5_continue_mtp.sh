@@ -9,8 +9,8 @@ export TORCH_NCCL_AVOID_RECORD_STREAMS=1
 
 # 从 run_oc1.5.sh 迁移的路径和基本配置
 ROOT="/step3-abla/siming"
-# MEGATRON_PATH="/step3-abla/lxz/oc/Megatron-LM"
-MEGATRON_PATH="./"
+MEGATRON_PATH="/step3-abla/lxz/oc/Megatron-LM"
+# MEGATRON_PATH="./"
 CHECKPOINT_PATH="/step3-abla/lxz/oc/save/checkpoint/${SAVE_NAME}/"
 TENSORBOARD_LOGS_PATH="/step3-abla/lxz/oc/save/tensorboard/${SAVE_NAME}/"
 PRETRAIN_CHECKPOINT_PATH="/step3-abla/lxz/oc/save/checkpoint/iter_0484865/"
