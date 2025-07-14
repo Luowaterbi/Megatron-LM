@@ -162,7 +162,7 @@ FLASH_ARGS=(
 
 # 评估和日志参数
 EVAL_AND_LOGGING_ARGS=(
-    --log-interval 1
+    --log-interval 10
     --eval-interval 1000
     --eval-iters 50
     --save-interval 250

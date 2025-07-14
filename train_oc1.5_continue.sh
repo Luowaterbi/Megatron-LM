@@ -12,7 +12,7 @@ ROOT="/step3-abla/siming"
 MEGATRON_PATH="/step3-abla/lxz/oc/Megatron-LM"
 CHECKPOINT_PATH="/step3-abla/lxz/oc/save/checkpoint/${SAVE_NAME}/"
 TENSORBOARD_LOGS_PATH="/step3-abla/lxz/oc/save/tensorboard/${SAVE_NAME}/"
-PRETRAIN_CHECKPOINT_PATH="/step3-abla/lxz/oc/save/checkpoint/iter_0484865/"
+PRETRAIN_CHECKPOINT_PATH="/step3-abla/lxz/oc/save/checkpoint/iter_0484865_vocab_96539/"
 
 # Create directories if they don't exist
 mkdir -p "$CHECKPOINT_PATH"

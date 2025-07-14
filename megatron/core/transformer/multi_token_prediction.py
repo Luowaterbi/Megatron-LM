@@ -228,7 +228,10 @@ class MTPLossLoggingHelper:
             name = f"mtp_{i+1} loss"
             loss = mtp_losses[i]
             if total_loss_dict is not None:
-                total_loss_dict[name] = loss
+                if name in total_loss_dict:
+                    total_loss_dict[name] += loss
+                else:
+                    total_loss_dict[name] = loss
             if writer is not None:
                 writer.add_scalar(name, loss, iteration)
             if wandb_writer is not None:
@@ -243,7 +246,10 @@ class MTPLossLoggingHelper:
                     accuracy = accuracy_values[i] / accuracy_counts[i]
                     name = f"mtp_{i+1} accuracy"
                     if total_loss_dict is not None:
-                        total_loss_dict[name] = accuracy
+                        if name in total_loss_dict:
+                            total_loss_dict[name] += accuracy
+                        else:
+                            total_loss_dict[name] = accuracy
                     if writer is not None:
                         writer.add_scalar(name, accuracy, iteration)
                     if wandb_writer is not None:
